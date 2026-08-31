@@ -184,13 +184,13 @@ public final class RemoteMiningManager {
 }
 
 final class ScanLayout {
-    static final int SIDE = 64;
-    static final int HALF_RANGE = 32;
+    static final int SIDE = 16;
+    static final int HALF_RANGE = 8;
     static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
     private ScanLayout() {}
-    static int offsetX(int index) { return (index & 63) - HALF_RANGE; }
-    static int offsetZ(int index) { return ((index >> 6) & 63) - HALF_RANGE; }
-    static int offsetY(int index) { return ((index >> 12) & 63) - HALF_RANGE; }
+    static int offsetX(int index) { return (index & 15) - HALF_RANGE; }
+    static int offsetZ(int index) { return ((index >> 4) & 15) - HALF_RANGE; }
+    static int offsetY(int index) { return ((index >> 8) & 15) - HALF_RANGE; }
 }
 
 final class RewardMath {
