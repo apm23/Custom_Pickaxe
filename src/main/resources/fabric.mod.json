@@ -3,8 +3,8 @@
   "id": "custom_pickaxe",
   "version": "${version}",
   "name": "Custom Pickaxe",
-  "description": "Server-side custom pickaxe mechanics using vanilla iron pickaxe carriers.",
-  "environment": "server",
+  "description": "Server-authoritative custom pickaxe mechanics using vanilla iron pickaxe carriers.",
+  "environment": "*",
   "entrypoints": {
     "main": [
       "com.apm23.custompickaxe.CustomPickaxeMod"
