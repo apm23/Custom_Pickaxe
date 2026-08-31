@@ -21,7 +21,7 @@ final class MultiPageInventoryCompatTest {
 
     @Test
     void fillsExistingStacksBeforeEmptyHiddenSlotsWithoutLoss() {
-        ArrayList<FakeStack> page = emptyPage();
+        ArrayList<FakeStack> page = emptyPage(27);
         page.set(0, new FakeStack("diamond", 60, 64));
         FakeStack remaining = new FakeStack("diamond", 70, 64);
 
@@ -36,8 +36,7 @@ final class MultiPageInventoryCompatTest {
 
     @Test
     void fullPageLeavesExactRemainderForFollowingPages() {
-        ArrayList<FakeStack> page = new ArrayList<>(27);
-        for (int i = 0; i < 27; i++) page.add(new FakeStack("stone", 64, 64));
+        ArrayList<FakeStack> page = fullPage("stone", 27);
         FakeStack remaining = new FakeStack("diamond", 37, 64);
 
         MultiPageInventoryCompat.insertGeneric(page, remaining, OPS);
@@ -48,7 +47,7 @@ final class MultiPageInventoryCompatTest {
 
     @Test
     void differentItemsAreNeverMerged() {
-        ArrayList<FakeStack> page = emptyPage();
+        ArrayList<FakeStack> page = emptyPage(27);
         page.set(0, new FakeStack("emerald", 10, 64));
         FakeStack remaining = new FakeStack("diamond", 5, 64);
 
@@ -59,9 +58,51 @@ final class MultiPageInventoryCompatTest {
         assertEquals(5, page.get(1).count);
     }
 
-    private static ArrayList<FakeStack> emptyPage() {
-        ArrayList<FakeStack> page = new ArrayList<>(27);
-        for (int i = 0; i < 27; i++) page.add(new FakeStack("", 0, 64));
+    @Test
+    void fullActivePageRoutesRewardThroughHiddenPagesBeforeAltHotbarOrDrop() {
+        // Model the real preservation order after the live/active vanilla inventory has rejected overflow:
+        // hidden pages 1..7 first, alternate hotbar last, world drop only if a remainder survives all of them.
+        List<ArrayList<FakeStack>> hiddenPages = new ArrayList<>();
+        hiddenPages.add(fullPage("stone", 27));
+        hiddenPages.add(emptyPage(27));
+        for (int i = 0; i < 5; i++) hiddenPages.add(emptyPage(27));
+        ArrayList<FakeStack> altHotbar = emptyPage(9);
+
+        FakeStack remaining = new FakeStack("iron_block", 130, 64);
+        for (ArrayList<FakeStack> page : hiddenPages) {
+            MultiPageInventoryCompat.insertGeneric(page, remaining, OPS);
+            if (OPS.empty(remaining)) break;
+        }
+        if (!OPS.empty(remaining)) MultiPageInventoryCompat.insertGeneric(altHotbar, remaining, OPS);
+
+        assertTrue(OPS.empty(remaining), "reward would have fallen through to a world drop despite free hidden-page capacity");
+        assertEquals(130, count(hiddenPages.get(1), "iron_block"));
+        assertEquals(0, count(altHotbar, "iron_block"));
+    }
+
+    @Test
+    void allHiddenPagesFullUsesAltHotbarBeforeWorldDrop() {
+        List<ArrayList<FakeStack>> hiddenPages = new ArrayList<>();
+        for (int i = 0; i < 7; i++) hiddenPages.add(fullPage("stone", 27));
+        ArrayList<FakeStack> altHotbar = emptyPage(9);
+        FakeStack remaining = new FakeStack("debris", 65, 64);
+
+        for (ArrayList<FakeStack> page : hiddenPages) MultiPageInventoryCompat.insertGeneric(page, remaining, OPS);
+        MultiPageInventoryCompat.insertGeneric(altHotbar, remaining, OPS);
+
+        assertTrue(OPS.empty(remaining));
+        assertEquals(65, count(altHotbar, "debris"));
+    }
+
+    private static ArrayList<FakeStack> emptyPage(int size) {
+        ArrayList<FakeStack> page = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) page.add(new FakeStack("", 0, 64));
+        return page;
+    }
+
+    private static ArrayList<FakeStack> fullPage(String id, int size) {
+        ArrayList<FakeStack> page = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) page.add(new FakeStack(id, 64, 64));
         return page;
     }
 
