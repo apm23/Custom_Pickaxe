@@ -34,6 +34,7 @@ final class RecipeRegressionTest {
             assertTrue(json.contains("\"id\":\"minecraft:iron_pickaxe\""), type + " must stay disguised as an iron pickaxe");
             assertTrue(json.contains("\"custom_pickaxe\":{\"type\":\"" + type + "\",\"enabled\":true,\"version\":1}"),
                     type + " hidden signature changed");
+            assertTrue(json.contains("\"show_notification\":false"), type + " recipe must never show a discovery toast");
 
             for (String ingredient : entry.getValue()) {
                 assertTrue(json.contains("\"" + ingredient + "\""), type + " lost ingredient " + ingredient);
