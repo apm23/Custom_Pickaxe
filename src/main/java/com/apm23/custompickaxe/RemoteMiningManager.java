@@ -157,7 +157,14 @@ public final class RemoteMiningManager {
             while (remaining > 0) {
                 int amount = RewardMath.nextStackSize(remaining, maxStack);
                 ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
+
+                // First use the live vanilla inventory (the active page + hotbar), then route any
+                // remainder through every hidden page exposed by custom-hotbar-inventory.
                 player.getInventory().add(stack);
+                if (!stack.isEmpty()) {
+                    MultiPageInventoryCompat.insertOverflow(player, stack);
+                }
+
                 if (!stack.isEmpty()) {
                     ServerLevel dropLevel = player.level() instanceof ServerLevel current ? current : null;
                     if (dropLevel != null) {
