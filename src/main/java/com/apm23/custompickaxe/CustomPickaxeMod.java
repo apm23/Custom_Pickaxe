@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -31,7 +32,7 @@ public final class CustomPickaxeMod implements ModInitializer {
             boolean enabled = GlobalPickaxeState.toggle(serverPlayer.getUUID());
             Component status = Component.literal(enabled ? "Pickaxe: ON" : "Pickaxe: OFF")
                     .withStyle(enabled ? ChatFormatting.DARK_GREEN : ChatFormatting.DARK_GRAY);
-            serverPlayer.displayClientMessage(status, true);
+            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(status));
             return InteractionResult.SUCCESS;
         });
 
