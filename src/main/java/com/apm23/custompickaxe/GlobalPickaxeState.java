@@ -4,19 +4,42 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Lightweight per-player global state shared by every custom pickaxe type. */
+/** Lightweight per-player global level shared by every custom pickaxe type. */
 final class GlobalPickaxeState {
-    private static final Map<UUID, Boolean> ENABLED = new ConcurrentHashMap<>();
+    static final int OFF = 0;
+    static final int LEVEL_1 = 1;
+    static final int LEVEL_2 = 2;
+    static final int LEVEL_3 = 3;
+
+    private static final Map<UUID, Integer> LEVELS = new ConcurrentHashMap<>();
 
     private GlobalPickaxeState() {}
 
-    static boolean isEnabled(UUID playerId) {
-        return ENABLED.getOrDefault(playerId, true);
+    static int level(UUID playerId) {
+        return LEVELS.getOrDefault(playerId, OFF);
     }
 
-    static boolean toggle(UUID playerId) {
-        boolean next = !isEnabled(playerId);
-        ENABLED.put(playerId, next);
+    static boolean isEnabled(UUID playerId) {
+        return level(playerId) != OFF;
+    }
+
+    static int cycle(UUID playerId) {
+        int next = switch (level(playerId)) {
+            case OFF -> LEVEL_1;
+            case LEVEL_1 -> LEVEL_2;
+            case LEVEL_2 -> LEVEL_3;
+            default -> OFF;
+        };
+        LEVELS.put(playerId, next);
         return next;
+    }
+
+    static int sideForLevel(int level) {
+        return switch (level) {
+            case LEVEL_1 -> 8;
+            case LEVEL_2 -> 16;
+            case LEVEL_3 -> 64;
+            default -> 0;
+        };
     }
 }
