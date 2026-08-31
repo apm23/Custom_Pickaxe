@@ -44,14 +44,14 @@ public final class RemoteMiningManager {
         return TARGETS.containsKey(type);
     }
 
-    public static void start(ServerPlayer player, BlockPos origin, String type) {
+    public static void start(ServerPlayer player, BlockPos origin, String type, int side) {
         TargetSpec target = TARGETS.get(type);
-        if (target == null) return;
+        if (target == null || !ScanLayout.isSupportedSide(side)) return;
 
         if (player.level() instanceof ServerLevel level) breakNaturalMask(level, player, origin);
 
         ScanTask previous = TASKS.put(player.getUUID(), new ScanTask(
-                player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target));
+                player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target, side));
         if (previous != null) previous.preserveCollected();
     }
 
@@ -94,18 +94,22 @@ public final class RemoteMiningManager {
         private final int originX, originY, originZ;
         private final ResourceKey<Level> dimension;
         private final TargetSpec target;
+        private final int side;
+        private final int totalPositions;
         private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
         private int cursor;
         private int collected;
 
         private ScanTask(ServerPlayer player, int originX, int originY, int originZ,
-                         ResourceKey<Level> dimension, TargetSpec target) {
+                         ResourceKey<Level> dimension, TargetSpec target, int side) {
             this.player = player;
             this.originX = originX;
             this.originY = originY;
             this.originZ = originZ;
             this.dimension = dimension;
             this.target = target;
+            this.side = side;
+            this.totalPositions = ScanLayout.totalPositions(side);
         }
 
         private boolean tick(ServerLevel level) {
@@ -116,7 +120,7 @@ public final class RemoteMiningManager {
             }
 
             scanAndBreak(level);
-            if (cursor >= ScanLayout.TOTAL_POSITIONS) {
+            if (cursor >= totalPositions) {
                 dropCollected(level);
                 collected = 0;
                 return true;
@@ -127,11 +131,11 @@ public final class RemoteMiningManager {
         private void scanAndBreak(ServerLevel level) {
             int scanned = 0;
             int broken = 0;
-            while (cursor < ScanLayout.TOTAL_POSITIONS && scanned < POSITIONS_PER_TICK && broken < BLOCKS_PER_TICK) {
+            while (cursor < totalPositions && scanned < POSITIONS_PER_TICK && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
                 scanned++;
-                scanPos.set(originX + ScanLayout.offsetX(index), originY + ScanLayout.offsetY(index),
-                        originZ + ScanLayout.offsetZ(index));
+                scanPos.set(originX + ScanLayout.offsetX(index, side), originY + ScanLayout.offsetY(index, side),
+                        originZ + ScanLayout.offsetZ(index, side));
 
                 if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) continue;
                 BlockState state = level.getBlockState(scanPos);
@@ -184,13 +188,27 @@ public final class RemoteMiningManager {
 }
 
 final class ScanLayout {
-    static final int SIDE = 16;
-    static final int HALF_RANGE = 8;
-    static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
     private ScanLayout() {}
-    static int offsetX(int index) { return (index & 15) - HALF_RANGE; }
-    static int offsetZ(int index) { return ((index >> 4) & 15) - HALF_RANGE; }
-    static int offsetY(int index) { return ((index >> 8) & 15) - HALF_RANGE; }
+
+    static boolean isSupportedSide(int side) {
+        return side == 8 || side == 16 || side == 64;
+    }
+
+    static int totalPositions(int side) {
+        return side * side * side;
+    }
+
+    static int offsetX(int index, int side) {
+        return (index % side) - side / 2;
+    }
+
+    static int offsetZ(int index, int side) {
+        return ((index / side) % side) - side / 2;
+    }
+
+    static int offsetY(int index, int side) {
+        return (index / (side * side)) - side / 2;
+    }
 }
 
 final class RewardMath {
