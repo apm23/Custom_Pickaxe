@@ -2,6 +2,7 @@ package com.apm23.custompickaxe;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -11,7 +12,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -21,40 +24,35 @@ public final class RemoteMiningManager {
     private static final int POSITIONS_PER_TICK = 2048;
     private static final int BLOCKS_PER_TICK = 64;
 
-    private static final Map<String, Block> TARGETS = Map.of(
-            "iron", Blocks.IRON_BLOCK,
-            "copper", Blocks.COPPER_BLOCK.asList().get(0),
-            "gold", Blocks.GOLD_BLOCK,
-            "diamond", Blocks.DIAMOND_BLOCK,
-            "emerald", Blocks.EMERALD_BLOCK,
-            "coal", Blocks.COAL_BLOCK,
-            "lapis", Blocks.LAPIS_BLOCK,
-            "redstone", Blocks.REDSTONE_BLOCK,
-            "debris", Blocks.ANCIENT_DEBRIS
+    private static final Map<String, TargetSpec> TARGETS = Map.of(
+            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON),
+            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER),
+            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD),
+            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND),
+            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD),
+            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
+            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
+            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
+            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS)
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
 
-    private RemoteMiningManager() {
-    }
+    private RemoteMiningManager() {}
 
     public static boolean isSupportedType(String type) {
         return TARGETS.containsKey(type);
     }
 
     public static void start(ServerPlayer player, BlockPos origin, String type) {
-        Block target = TARGETS.get(type);
+        TargetSpec target = TARGETS.get(type);
         if (target == null) return;
 
-        if (player.level() instanceof ServerLevel level) {
-            breakNaturalMask(level, player, origin);
-        }
+        if (player.level() instanceof ServerLevel level) breakNaturalMask(level, player, origin);
 
         ScanTask previous = TASKS.put(player.getUUID(), new ScanTask(
                 player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target));
-        if (previous != null) {
-            previous.preserveCollected();
-        }
+        if (previous != null) previous.preserveCollected();
     }
 
     public static void tick(ServerLevel level) {
@@ -95,24 +93,23 @@ public final class RemoteMiningManager {
         private final ServerPlayer player;
         private final int originX, originY, originZ;
         private final ResourceKey<Level> dimension;
-        private final Block targetBlock;
+        private final TargetSpec target;
         private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
         private int cursor;
         private int collected;
 
         private ScanTask(ServerPlayer player, int originX, int originY, int originZ,
-                         ResourceKey<Level> dimension, Block targetBlock) {
+                         ResourceKey<Level> dimension, TargetSpec target) {
             this.player = player;
             this.originX = originX;
             this.originY = originY;
             this.originZ = originZ;
             this.dimension = dimension;
-            this.targetBlock = targetBlock;
+            this.target = target;
         }
 
         private boolean tick(ServerLevel level) {
             if (level.dimension() != dimension) return false;
-
             if (player.isRemoved() || player.hasDisconnected() || player.level() != level) {
                 preserveCollected();
                 return true;
@@ -133,11 +130,12 @@ public final class RemoteMiningManager {
             while (cursor < ScanLayout.TOTAL_POSITIONS && scanned < POSITIONS_PER_TICK && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
                 scanned++;
-                scanPos.set(originX + ScanLayout.offsetX(index), y(originY, index),
+                scanPos.set(originX + ScanLayout.offsetX(index), originY + ScanLayout.offsetY(index),
                         originZ + ScanLayout.offsetZ(index));
 
                 if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) continue;
-                if (!level.getBlockState(scanPos).is(targetBlock)) continue;
+                BlockState state = level.getBlockState(scanPos);
+                if (!target.blocks.contains(state.getBlock())) continue;
                 if (level.destroyBlock(scanPos, false, player)) {
                     collected++;
                     broken++;
@@ -145,33 +143,19 @@ public final class RemoteMiningManager {
             }
         }
 
-        private static int y(int originY, int index) {
-            return originY + ScanLayout.offsetY(index);
-        }
-
         private void preserveCollected() {
             if (collected <= 0) return;
-
             int remaining = collected;
-            int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
+            int maxStack = target.reward.getDefaultMaxStackSize();
             while (remaining > 0) {
                 int amount = RewardMath.nextStackSize(remaining, maxStack);
-                ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
-
-                // First use the live vanilla inventory (the active page + hotbar), then route any
-                // remainder through every hidden page exposed by custom-hotbar-inventory.
+                ItemStack stack = new ItemStack(target.reward, amount);
                 player.getInventory().add(stack);
-                if (!stack.isEmpty()) {
-                    MultiPageInventoryCompat.insertOverflow(player, stack);
-                }
-
-                if (!stack.isEmpty()) {
-                    ServerLevel dropLevel = player.level() instanceof ServerLevel current ? current : null;
-                    if (dropLevel != null) {
-                        ItemEntity entity = new ItemEntity(dropLevel, player.getX(), player.getY() + 0.5, player.getZ(), stack.copy());
-                        entity.setDefaultPickUpDelay();
-                        dropLevel.addFreshEntity(entity);
-                    }
+                if (!stack.isEmpty()) MultiPageInventoryCompat.insertOverflow(player, stack);
+                if (!stack.isEmpty() && player.level() instanceof ServerLevel dropLevel) {
+                    ItemEntity entity = new ItemEntity(dropLevel, player.getX(), player.getY() + 0.5, player.getZ(), stack.copy());
+                    entity.setDefaultPickUpDelay();
+                    dropLevel.addFreshEntity(entity);
                 }
                 remaining -= amount;
             }
@@ -180,32 +164,30 @@ public final class RemoteMiningManager {
 
         private void dropCollected(ServerLevel level) {
             if (collected <= 0) return;
-
             var look = player.getLookAngle();
             double x = player.getX() + look.x;
             double y = player.getY() + 0.5;
             double z = player.getZ() + look.z;
             int remaining = collected;
-            int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
-
+            int maxStack = target.reward.getDefaultMaxStackSize();
             while (remaining > 0) {
                 int amount = RewardMath.nextStackSize(remaining, maxStack);
-                ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(targetBlock.asItem(), amount));
+                ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(target.reward, amount));
                 entity.setDefaultPickUpDelay();
                 level.addFreshEntity(entity);
                 remaining -= amount;
             }
         }
     }
+
+    private record TargetSpec(Set<Block> blocks, Item reward) {}
 }
 
 final class ScanLayout {
     static final int SIDE = 64;
     static final int HALF_RANGE = 32;
     static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
-
     private ScanLayout() {}
-
     static int offsetX(int index) { return (index & 63) - HALF_RANGE; }
     static int offsetZ(int index) { return ((index >> 6) & 63) - HALF_RANGE; }
     static int offsetY(int index) { return ((index >> 12) & 63) - HALF_RANGE; }
@@ -213,7 +195,6 @@ final class ScanLayout {
 
 final class RewardMath {
     private RewardMath() {}
-
     static int nextStackSize(int remaining, int maxStack) {
         if (remaining <= 0 || maxStack <= 0) return 0;
         return Math.min(remaining, maxStack);
