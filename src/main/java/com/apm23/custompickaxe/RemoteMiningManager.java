@@ -1,7 +1,5 @@
 package com.apm23.custompickaxe;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -22,8 +20,12 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class RemoteMiningManager {
     private static final int HALF_RANGE = 32;
     private static final int SIDE = 64;
-    private static final int POSITIONS_PER_TICK = 8192;
-    private static final int BLOCKS_PER_TICK = 256;
+    private static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
+
+    // Deliberately conservative. A complete 64^3 scan takes roughly 128 server ticks
+    // (~6.4 seconds at 20 TPS), trading a little latency for much lower tick spikes.
+    private static final int POSITIONS_PER_TICK = 2048;
+    private static final int BLOCKS_PER_TICK = 64;
 
     private static final Map<String, Block> TARGETS = Map.of(
             "iron", Blocks.IRON_BLOCK,
@@ -56,7 +58,16 @@ public final class RemoteMiningManager {
             breakNaturalMask(level, player, origin);
         }
 
-        TASKS.put(player.getUUID(), new ScanTask(player, origin.immutable(), player.level().dimension(), target));
+        // One active scan per player. Re-triggering replaces the old scan instead of
+        // accumulating background work.
+        TASKS.put(player.getUUID(), new ScanTask(
+                player,
+                origin.getX(),
+                origin.getY(),
+                origin.getZ(),
+                player.level().dimension(),
+                target
+        ));
     }
 
     public static void tick(ServerLevel level) {
@@ -117,17 +128,27 @@ public final class RemoteMiningManager {
 
     private static final class ScanTask {
         private final ServerPlayer player;
-        private final BlockPos origin;
+        private final int originX;
+        private final int originY;
+        private final int originZ;
         private final ResourceKey<Level> dimension;
         private final Block targetBlock;
-        private final Deque<BlockPos> targets = new ArrayDeque<>();
+        private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
         private int cursor;
         private int collected;
-        private boolean scanComplete;
 
-        private ScanTask(ServerPlayer player, BlockPos origin, ResourceKey<Level> dimension, Block targetBlock) {
+        private ScanTask(
+                ServerPlayer player,
+                int originX,
+                int originY,
+                int originZ,
+                ResourceKey<Level> dimension,
+                Block targetBlock
+        ) {
             this.player = player;
-            this.origin = origin;
+            this.originX = originX;
+            this.originY = originY;
+            this.originZ = originZ;
             this.dimension = dimension;
             this.targetBlock = targetBlock;
         }
@@ -143,44 +164,44 @@ public final class RemoteMiningManager {
                 return true;
             }
 
-            if (!scanComplete) {
-                scan(level);
-            }
-            breakTargets(level);
+            scanAndBreak(level);
 
-            if (scanComplete && targets.isEmpty()) {
+            if (cursor >= TOTAL_POSITIONS) {
                 dropCollected(level);
                 return true;
             }
             return false;
         }
 
-        private void scan(ServerLevel level) {
-            int end = Math.min(cursor + POSITIONS_PER_TICK, SIDE * SIDE * SIDE);
-            while (cursor < end) {
+        private void scanAndBreak(ServerLevel level) {
+            int scanned = 0;
+            int broken = 0;
+
+            while (cursor < TOTAL_POSITIONS
+                    && scanned < POSITIONS_PER_TICK
+                    && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
+                scanned++;
+
                 int x = index & 63;
                 int z = (index >> 6) & 63;
                 int y = (index >> 12) & 63;
-                BlockPos pos = origin.offset(x - HALF_RANGE, y - HALF_RANGE, z - HALF_RANGE);
-                if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) {
-                    continue;
-                }
-                if (level.getBlockState(pos).is(targetBlock)) {
-                    targets.addLast(pos.immutable());
-                }
-            }
-            scanComplete = cursor >= SIDE * SIDE * SIDE;
-        }
 
-        private void breakTargets(ServerLevel level) {
-            int broken = 0;
-            while (broken < BLOCKS_PER_TICK && !targets.isEmpty()) {
-                BlockPos pos = targets.removeFirst();
-                if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(targetBlock)) {
+                scanPos.set(
+                        originX + x - HALF_RANGE,
+                        originY + y - HALF_RANGE,
+                        originZ + z - HALF_RANGE
+                );
+
+                if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) {
                     continue;
                 }
-                if (level.destroyBlock(pos, false, player)) {
+
+                if (!level.getBlockState(scanPos).is(targetBlock)) {
+                    continue;
+                }
+
+                if (level.destroyBlock(scanPos, false, player)) {
                     collected++;
                     broken++;
                 }
