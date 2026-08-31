@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "custom_pickaxe",
+  "version": "${version}",
+  "name": "Custom Pickaxe",
+  "description": "Server-side custom pickaxe mechanics using vanilla iron pickaxe carriers.",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "com.apm23.custompickaxe.CustomPickaxeMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
