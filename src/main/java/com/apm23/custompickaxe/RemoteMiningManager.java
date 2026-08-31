@@ -133,7 +133,7 @@ public final class RemoteMiningManager {
             while (cursor < ScanLayout.TOTAL_POSITIONS && scanned < POSITIONS_PER_TICK && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
                 scanned++;
-                scanPos.set(originX + ScanLayout.offsetX(index), originY + ScanLayout.offsetY(index),
+                scanPos.set(originX + ScanLayout.offsetX(index), y(originY, index),
                         originZ + ScanLayout.offsetZ(index));
 
                 if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) continue;
@@ -145,13 +145,17 @@ public final class RemoteMiningManager {
             }
         }
 
+        private static int y(int originY, int index) {
+            return originY + ScanLayout.offsetY(index);
+        }
+
         private void preserveCollected() {
             if (collected <= 0) return;
 
             int remaining = collected;
             int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
             while (remaining > 0) {
-                int amount = Math.min(remaining, maxStack);
+                int amount = RewardMath.nextStackSize(remaining, maxStack);
                 ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
                 player.getInventory().add(stack);
                 if (!stack.isEmpty()) {
@@ -178,7 +182,7 @@ public final class RemoteMiningManager {
             int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
 
             while (remaining > 0) {
-                int amount = Math.min(remaining, maxStack);
+                int amount = RewardMath.nextStackSize(remaining, maxStack);
                 ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(targetBlock.asItem(), amount));
                 entity.setDefaultPickUpDelay();
                 level.addFreshEntity(entity);
@@ -198,4 +202,13 @@ final class ScanLayout {
     static int offsetX(int index) { return (index & 63) - HALF_RANGE; }
     static int offsetZ(int index) { return ((index >> 6) & 63) - HALF_RANGE; }
     static int offsetY(int index) { return ((index >> 12) & 63) - HALF_RANGE; }
+}
+
+final class RewardMath {
+    private RewardMath() {}
+
+    static int nextStackSize(int remaining, int maxStack) {
+        if (remaining <= 0 || maxStack <= 0) return 0;
+        return Math.min(remaining, maxStack);
+    }
 }
