@@ -6,9 +6,10 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +34,7 @@ public final class CustomPickaxeMod implements ModInitializer {
         });
 
         PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> {
-            if (!(level instanceof ServerLevel serverLevel) || !(player instanceof ServerPlayer serverPlayer)) {
+            if (!(level instanceof ServerLevel) || !(player instanceof ServerPlayer serverPlayer)) {
                 return;
             }
 
@@ -53,14 +54,24 @@ public final class CustomPickaxeMod implements ModInitializer {
         LOGGER.info("Custom Pickaxe server-side mod initialized");
     }
 
-    private static boolean isOre(net.minecraft.world.level.block.state.BlockState state) {
-        return state.is(BlockTags.COAL_ORES)
-                || state.is(BlockTags.COPPER_ORES)
-                || state.is(BlockTags.DIAMOND_ORES)
-                || state.is(BlockTags.EMERALD_ORES)
-                || state.is(BlockTags.GOLD_ORES)
-                || state.is(BlockTags.IRON_ORES)
-                || state.is(BlockTags.LAPIS_ORES)
-                || state.is(BlockTags.REDSTONE_ORES);
+    private static boolean isOre(BlockState state) {
+        return state.is(Blocks.COAL_ORE)
+                || state.is(Blocks.DEEPSLATE_COAL_ORE)
+                || state.is(Blocks.COPPER_ORE)
+                || state.is(Blocks.DEEPSLATE_COPPER_ORE)
+                || state.is(Blocks.DIAMOND_ORE)
+                || state.is(Blocks.DEEPSLATE_DIAMOND_ORE)
+                || state.is(Blocks.EMERALD_ORE)
+                || state.is(Blocks.DEEPSLATE_EMERALD_ORE)
+                || state.is(Blocks.GOLD_ORE)
+                || state.is(Blocks.DEEPSLATE_GOLD_ORE)
+                || state.is(Blocks.NETHER_GOLD_ORE)
+                || state.is(Blocks.IRON_ORE)
+                || state.is(Blocks.DEEPSLATE_IRON_ORE)
+                || state.is(Blocks.LAPIS_ORE)
+                || state.is(Blocks.DEEPSLATE_LAPIS_ORE)
+                || state.is(Blocks.REDSTONE_ORE)
+                || state.is(Blocks.DEEPSLATE_REDSTONE_ORE)
+                || state.is(Blocks.NETHER_QUARTZ_ORE);
     }
 }
