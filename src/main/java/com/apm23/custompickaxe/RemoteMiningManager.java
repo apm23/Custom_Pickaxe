@@ -24,13 +24,14 @@ public final class RemoteMiningManager {
 
     private static final Map<String, Block> TARGETS = Map.of(
             "iron", Blocks.IRON_BLOCK,
-            "copper", Blocks.COPPER_BLOCK,
+            "copper", Blocks.COPPER_BLOCK.getFirst(),
             "gold", Blocks.GOLD_BLOCK,
             "diamond", Blocks.DIAMOND_BLOCK,
             "emerald", Blocks.EMERALD_BLOCK,
             "coal", Blocks.COAL_BLOCK,
             "lapis", Blocks.LAPIS_BLOCK,
-            "redstone", Blocks.REDSTONE_BLOCK
+            "redstone", Blocks.REDSTONE_BLOCK,
+            "debris", Blocks.ANCIENT_DEBRIS
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
@@ -72,51 +73,31 @@ public final class RemoteMiningManager {
         }
 
         private boolean tick(ServerLevel level) {
-            if (player.isRemoved()) {
-                return true;
-            }
+            if (player.isRemoved()) return true;
+            if (level.dimension() != dimension) return false;
+            if (player.level() != level) return true;
 
-            if (level.dimension() != dimension) {
-                return false;
-            }
-
-            if (player.level() != level) {
-                return true;
-            }
-
-            if (!scanComplete) {
-                scan(level);
-            }
-
+            if (!scanComplete) scan(level);
             breakTargets(level);
 
             if (scanComplete && targets.isEmpty()) {
                 dropCollected(level);
                 return true;
             }
-
             return false;
         }
 
         private void scan(ServerLevel level) {
             int end = Math.min(cursor + POSITIONS_PER_TICK, SIDE * SIDE * SIDE);
-
             while (cursor < end) {
                 int index = cursor++;
                 int x = index & 63;
                 int z = (index >> 6) & 63;
                 int y = (index >> 12) & 63;
-
                 BlockPos pos = origin.offset(x - HALF_RANGE, y - HALF_RANGE, z - HALF_RANGE);
-                if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) {
-                    continue;
-                }
-
-                if (level.getBlockState(pos).is(targetBlock)) {
-                    targets.addLast(pos.immutable());
-                }
+                if (!level.isInWorldBounds(pos) || !level.hasChunkAt(pos)) continue;
+                if (level.getBlockState(pos).is(targetBlock)) targets.addLast(pos.immutable());
             }
-
             scanComplete = cursor >= SIDE * SIDE * SIDE;
         }
 
@@ -124,10 +105,7 @@ public final class RemoteMiningManager {
             int broken = 0;
             while (broken < BLOCKS_PER_TICK && !targets.isEmpty()) {
                 BlockPos pos = targets.removeFirst();
-                if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(targetBlock)) {
-                    continue;
-                }
-
+                if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(targetBlock)) continue;
                 if (level.destroyBlock(pos, false, player)) {
                     collected++;
                     broken++;
@@ -136,15 +114,11 @@ public final class RemoteMiningManager {
         }
 
         private void dropCollected(ServerLevel level) {
-            if (collected <= 0) {
-                return;
-            }
-
+            if (collected <= 0) return;
             var look = player.getLookAngle();
             double x = player.getX() + look.x;
             double y = player.getY() + 0.5;
             double z = player.getZ() + look.z;
-
             int remaining = collected;
             int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
             while (remaining > 0) {
