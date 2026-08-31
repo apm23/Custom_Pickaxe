@@ -7,11 +7,13 @@ import java.util.Map;
 import java.util.UUID;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 
 public final class RemoteMiningManager {
@@ -26,7 +28,7 @@ public final class RemoteMiningManager {
     }
 
     public static void start(ServerPlayer player, BlockPos origin) {
-        TASKS.put(player.getUUID(), new ScanTask(player, origin.immutable()));
+        TASKS.put(player.getUUID(), new ScanTask(player, origin.immutable(), player.level().dimension()));
     }
 
     public static void tick(ServerLevel level) {
@@ -36,18 +38,28 @@ public final class RemoteMiningManager {
     private static final class ScanTask {
         private final ServerPlayer player;
         private final BlockPos origin;
+        private final ResourceKey<Level> dimension;
         private final Deque<BlockPos> targets = new ArrayDeque<>();
         private int cursor;
         private int collected;
         private boolean scanComplete;
 
-        private ScanTask(ServerPlayer player, BlockPos origin) {
+        private ScanTask(ServerPlayer player, BlockPos origin, ResourceKey<Level> dimension) {
             this.player = player;
             this.origin = origin;
+            this.dimension = dimension;
         }
 
         private boolean tick(ServerLevel level) {
-            if (player.isRemoved() || player.level() != level) {
+            if (player.isRemoved()) {
+                return true;
+            }
+
+            if (level.dimension() != dimension) {
+                return false;
+            }
+
+            if (player.level() != level) {
                 return true;
             }
 
