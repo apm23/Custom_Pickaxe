@@ -32,4 +32,19 @@ public final class PickaxeIdentity {
         CompoundTag marker = customData.copyTag().getCompoundOrEmpty(ROOT_KEY);
         return marker.getBooleanOr("enabled", false);
     }
+
+    public static boolean toggleEnabled(ItemStack stack) {
+        if (!isRemotePickaxe(stack)) {
+            return false;
+        }
+
+        CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        CompoundTag root = customData.copyTag();
+        CompoundTag marker = root.getCompoundOrEmpty(ROOT_KEY);
+        boolean enabled = !marker.getBooleanOr("enabled", false);
+        marker.putBoolean("enabled", enabled);
+        root.put(ROOT_KEY, marker);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+        return enabled;
+    }
 }
