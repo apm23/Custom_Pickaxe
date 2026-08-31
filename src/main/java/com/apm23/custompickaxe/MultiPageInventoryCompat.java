@@ -7,13 +7,6 @@ import java.util.List;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * Optional compatibility with apm23/custom-hotbar-inventory.
- *
- * The inventory mod is intentionally not a hard dependency. When it is present, overflow from the
- * live vanilla inventory is routed through every hidden inventory page and the alternate hotbar
- * before callers fall back to dropping the remainder into the world.
- */
 final class MultiPageInventoryCompat {
     private static final String STORAGE_CLASS = "com.anjas.custominventory.InventoryStorage";
     private static volatile boolean resolved;
@@ -23,27 +16,22 @@ final class MultiPageInventoryCompat {
 
     static void insertOverflow(ServerPlayer player, ItemStack remaining) {
         if (remaining.isEmpty()) return;
-
         Access api = resolve();
         if (api == null) return;
-
         try {
             api.snapshotLive.invoke(null, player);
             int activePage = (Integer) api.active.invoke(null, player);
-
             for (int page = 0; page < api.pageCount && !remaining.isEmpty(); page++) {
                 if (page == activePage) continue;
                 List<ItemStack> slots = mutableCopy(api.read.invoke(null, player, page), api.pageSize);
                 insertInto(slots, remaining);
                 api.write.invoke(null, player, page, slots);
             }
-
             if (!remaining.isEmpty()) {
                 List<ItemStack> hotbar = mutableCopy(api.readAltHotbar.invoke(null, player), 9);
                 insertInto(hotbar, remaining);
                 api.writeAltHotbar.invoke(null, player, hotbar);
             }
-
             api.sync.invoke(null, player);
         } catch (ReflectiveOperationException | RuntimeException error) {
             CustomPickaxeMod.LOGGER.warn("Could not route mining overflow into multi-page inventory; falling back to world drop", error);
@@ -51,27 +39,44 @@ final class MultiPageInventoryCompat {
     }
 
     static void insertInto(List<ItemStack> slots, ItemStack remaining) {
-        if (remaining.isEmpty()) return;
+        insertGeneric(slots, remaining, new SlotOps<>() {
+            public boolean empty(ItemStack s) { return s == null || s.isEmpty(); }
+            public boolean same(ItemStack a, ItemStack b) { return ItemStack.isSameItemSameComponents(a, b); }
+            public int count(ItemStack s) { return s.getCount(); }
+            public int max(ItemStack s) { return s.getMaxStackSize(); }
+            public void grow(ItemStack s, int n) { s.grow(n); }
+            public void shrink(ItemStack s, int n) { s.shrink(n); }
+            public ItemStack copyWithCount(ItemStack s, int n) { ItemStack c = s.copy(); c.setCount(n); return c; }
+        });
+    }
 
-        for (ItemStack existing : slots) {
-            if (remaining.isEmpty()) return;
-            if (existing == null || existing.isEmpty() || !ItemStack.isSameItemSameComponents(existing, remaining)) continue;
-            int room = existing.getMaxStackSize() - existing.getCount();
+    static <T> void insertGeneric(List<T> slots, T remaining, SlotOps<T> ops) {
+        if (ops.empty(remaining)) return;
+        for (T existing : slots) {
+            if (ops.empty(remaining)) return;
+            if (ops.empty(existing) || !ops.same(existing, remaining)) continue;
+            int room = ops.max(existing) - ops.count(existing);
             if (room <= 0) continue;
-            int moved = Math.min(room, remaining.getCount());
-            existing.grow(moved);
-            remaining.shrink(moved);
+            int moved = Math.min(room, ops.count(remaining));
+            ops.grow(existing, moved);
+            ops.shrink(remaining, moved);
         }
+        for (int i = 0; i < slots.size() && !ops.empty(remaining); i++) {
+            if (!ops.empty(slots.get(i))) continue;
+            int moved = Math.min(ops.count(remaining), ops.max(remaining));
+            slots.set(i, ops.copyWithCount(remaining, moved));
+            ops.shrink(remaining, moved);
+        }
+    }
 
-        for (int slot = 0; slot < slots.size() && !remaining.isEmpty(); slot++) {
-            ItemStack existing = slots.get(slot);
-            if (existing != null && !existing.isEmpty()) continue;
-            int moved = Math.min(remaining.getCount(), remaining.getMaxStackSize());
-            ItemStack placed = remaining.copy();
-            placed.setCount(moved);
-            slots.set(slot, placed);
-            remaining.shrink(moved);
-        }
+    interface SlotOps<T> {
+        boolean empty(T stack);
+        boolean same(T a, T b);
+        int count(T stack);
+        int max(T stack);
+        void grow(T stack, int amount);
+        void shrink(T stack, int amount);
+        T copyWithCount(T stack, int amount);
     }
 
     @SuppressWarnings("unchecked")
@@ -91,15 +96,10 @@ final class MultiPageInventoryCompat {
             if (resolved) return access;
             try {
                 Class<?> type = Class.forName(STORAGE_CLASS);
-                access = new Access(
-                        type.getField("PAGE_COUNT").getInt(null),
-                        type.getField("PAGE_SIZE").getInt(null),
-                        type.getMethod("snapshotLive", ServerPlayer.class),
-                        type.getMethod("active", ServerPlayer.class),
-                        type.getMethod("read", ServerPlayer.class, int.class),
-                        type.getMethod("write", ServerPlayer.class, int.class, List.class),
-                        type.getMethod("readAltHotbar", ServerPlayer.class),
-                        type.getMethod("writeAltHotbar", ServerPlayer.class, List.class),
+                access = new Access(type.getField("PAGE_COUNT").getInt(null), type.getField("PAGE_SIZE").getInt(null),
+                        type.getMethod("snapshotLive", ServerPlayer.class), type.getMethod("active", ServerPlayer.class),
+                        type.getMethod("read", ServerPlayer.class, int.class), type.getMethod("write", ServerPlayer.class, int.class, List.class),
+                        type.getMethod("readAltHotbar", ServerPlayer.class), type.getMethod("writeAltHotbar", ServerPlayer.class, List.class),
                         type.getMethod("sync", ServerPlayer.class));
                 CustomPickaxeMod.LOGGER.info("Multi-page inventory compatibility enabled");
             } catch (ClassNotFoundException ignored) {
@@ -113,14 +113,6 @@ final class MultiPageInventoryCompat {
         }
     }
 
-    private record Access(
-            int pageCount,
-            int pageSize,
-            Method snapshotLive,
-            Method active,
-            Method read,
-            Method write,
-            Method readAltHotbar,
-            Method writeAltHotbar,
-            Method sync) {}
+    private record Access(int pageCount, int pageSize, Method snapshotLive, Method active, Method read, Method write,
+                          Method readAltHotbar, Method writeAltHotbar, Method sync) {}
 }
