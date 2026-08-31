@@ -29,9 +29,16 @@ public final class CustomPickaxeMod implements ModInitializer {
                 return InteractionResult.PASS;
             }
 
-            boolean enabled = GlobalPickaxeState.toggle(serverPlayer.getUUID());
-            Component status = Component.literal(enabled ? "Pickaxe: ON" : "Pickaxe: OFF")
-                    .withStyle(enabled ? ChatFormatting.DARK_GREEN : ChatFormatting.DARK_GRAY);
+            int miningLevel = GlobalPickaxeState.cycle(serverPlayer.getUUID());
+            Component status = switch (miningLevel) {
+                case GlobalPickaxeState.LEVEL_1 -> Component.literal("Pickaxe: L1 8x8")
+                        .withStyle(ChatFormatting.DARK_GREEN);
+                case GlobalPickaxeState.LEVEL_2 -> Component.literal("Pickaxe: L2 16x16")
+                        .withStyle(ChatFormatting.GREEN);
+                case GlobalPickaxeState.LEVEL_3 -> Component.literal("Pickaxe: L3 64x64")
+                        .withStyle(ChatFormatting.GOLD);
+                default -> Component.literal("Pickaxe: OFF").withStyle(ChatFormatting.DARK_GRAY);
+            };
             serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(status));
             return InteractionResult.SUCCESS;
         });
@@ -40,9 +47,10 @@ public final class CustomPickaxeMod implements ModInitializer {
             if (!(level instanceof ServerLevel) || !(player instanceof ServerPlayer serverPlayer)) return;
             ItemStack stack = serverPlayer.getMainHandItem();
             String type = PickaxeIdentity.type(stack);
-            if (!PickaxeIdentity.isRemotePickaxe(stack) || !GlobalPickaxeState.isEnabled(serverPlayer.getUUID())
+            int miningLevel = GlobalPickaxeState.level(serverPlayer.getUUID());
+            if (!PickaxeIdentity.isRemotePickaxe(stack) || miningLevel == GlobalPickaxeState.OFF
                     || !RemoteMiningManager.isSupportedType(type) || isOreLikeResource(state)) return;
-            RemoteMiningManager.start(serverPlayer, pos, type);
+            RemoteMiningManager.start(serverPlayer, pos, type, GlobalPickaxeState.sideForLevel(miningLevel));
         });
 
         ServerTickEvents.END_LEVEL_TICK.register(RemoteMiningManager::tick);
