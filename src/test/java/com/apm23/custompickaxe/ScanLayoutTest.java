@@ -8,31 +8,39 @@ import org.junit.jupiter.api.Test;
 
 final class ScanLayoutTest {
     @Test
-    void coversEveryPositionExactlyOnce() {
-        BitSet seen = new BitSet(ScanLayout.TOTAL_POSITIONS);
+    void coversEveryPositionExactlyOnceForAllLevels() {
+        verifySide(8);
+        verifySide(16);
+        verifySide(64);
+    }
 
-        for (int index = 0; index < ScanLayout.TOTAL_POSITIONS; index++) {
-            int x = ScanLayout.offsetX(index);
-            int y = ScanLayout.offsetY(index);
-            int z = ScanLayout.offsetZ(index);
+    private static void verifySide(int side) {
+        int total = ScanLayout.totalPositions(side);
+        int half = side / 2;
+        BitSet seen = new BitSet(total);
 
-            assertTrue(x >= -8 && x <= 7);
-            assertTrue(y >= -8 && y <= 7);
-            assertTrue(z >= -8 && z <= 7);
+        for (int index = 0; index < total; index++) {
+            int x = ScanLayout.offsetX(index, side);
+            int y = ScanLayout.offsetY(index, side);
+            int z = ScanLayout.offsetZ(index, side);
 
-            int normalized = (x + 8)
-                    | ((z + 8) << 4)
-                    | ((y + 8) << 8);
-            assertTrue(!seen.get(normalized), "duplicate scan position at index " + index);
+            assertTrue(x >= -half && x <= half - 1);
+            assertTrue(y >= -half && y <= half - 1);
+            assertTrue(z >= -half && z <= half - 1);
+
+            int normalized = (x + half)
+                    + (z + half) * side
+                    + (y + half) * side * side;
+            assertTrue(!seen.get(normalized), "duplicate scan position for side " + side + " at index " + index);
             seen.set(normalized);
         }
 
-        assertEquals(16 * 16 * 16, seen.cardinality());
-        assertEquals(-8, ScanLayout.offsetX(0));
-        assertEquals(-8, ScanLayout.offsetY(0));
-        assertEquals(-8, ScanLayout.offsetZ(0));
-        assertEquals(7, ScanLayout.offsetX(ScanLayout.TOTAL_POSITIONS - 1));
-        assertEquals(7, ScanLayout.offsetY(ScanLayout.TOTAL_POSITIONS - 1));
-        assertEquals(7, ScanLayout.offsetZ(ScanLayout.TOTAL_POSITIONS - 1));
+        assertEquals(total, seen.cardinality());
+        assertEquals(-half, ScanLayout.offsetX(0, side));
+        assertEquals(-half, ScanLayout.offsetY(0, side));
+        assertEquals(-half, ScanLayout.offsetZ(0, side));
+        assertEquals(half - 1, ScanLayout.offsetX(total - 1, side));
+        assertEquals(half - 1, ScanLayout.offsetY(total - 1, side));
+        assertEquals(half - 1, ScanLayout.offsetZ(total - 1, side));
     }
 }
