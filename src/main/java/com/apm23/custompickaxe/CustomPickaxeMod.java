@@ -39,14 +39,15 @@ public final class CustomPickaxeMod implements ModInitializer {
             }
 
             ItemStack stack = serverPlayer.getMainHandItem();
+            String type = PickaxeIdentity.type(stack);
             if (!PickaxeIdentity.isRemotePickaxe(stack)
                     || !PickaxeIdentity.isEnabled(stack)
-                    || !"iron".equals(PickaxeIdentity.type(stack))
+                    || !RemoteMiningManager.isSupportedType(type)
                     || isOre(state)) {
                 return;
             }
 
-            RemoteMiningManager.start(serverPlayer, pos);
+            RemoteMiningManager.start(serverPlayer, pos, type);
         });
 
         ServerTickEvents.END_LEVEL_TICK.register(RemoteMiningManager::tick);

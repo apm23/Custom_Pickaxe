@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": ["R", "S"],
+  "key": {"R": "minecraft:emerald", "S": "minecraft:stick"},
+  "result": {"id": "minecraft:iron_pickaxe", "count": 1, "components": {"minecraft:custom_data": {"custom_pickaxe": {"type": "emerald", "enabled": true, "version": 1}}}},
+  "show_notification": false
+}

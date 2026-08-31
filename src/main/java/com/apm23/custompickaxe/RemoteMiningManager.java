@@ -12,8 +12,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
 public final class RemoteMiningManager {
@@ -22,13 +22,32 @@ public final class RemoteMiningManager {
     private static final int POSITIONS_PER_TICK = 8192;
     private static final int BLOCKS_PER_TICK = 256;
 
+    private static final Map<String, Block> TARGETS = Map.of(
+            "iron", Blocks.IRON_BLOCK,
+            "copper", Blocks.COPPER_BLOCK,
+            "gold", Blocks.GOLD_BLOCK,
+            "diamond", Blocks.DIAMOND_BLOCK,
+            "emerald", Blocks.EMERALD_BLOCK,
+            "coal", Blocks.COAL_BLOCK,
+            "lapis", Blocks.LAPIS_BLOCK,
+            "redstone", Blocks.REDSTONE_BLOCK
+    );
+
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
 
     private RemoteMiningManager() {
     }
 
-    public static void start(ServerPlayer player, BlockPos origin) {
-        TASKS.put(player.getUUID(), new ScanTask(player, origin.immutable(), player.level().dimension()));
+    public static boolean isSupportedType(String type) {
+        return TARGETS.containsKey(type);
+    }
+
+    public static void start(ServerPlayer player, BlockPos origin, String type) {
+        Block target = TARGETS.get(type);
+        if (target == null) {
+            return;
+        }
+        TASKS.put(player.getUUID(), new ScanTask(player, origin.immutable(), player.level().dimension(), target));
     }
 
     public static void tick(ServerLevel level) {
@@ -39,15 +58,17 @@ public final class RemoteMiningManager {
         private final ServerPlayer player;
         private final BlockPos origin;
         private final ResourceKey<Level> dimension;
+        private final Block targetBlock;
         private final Deque<BlockPos> targets = new ArrayDeque<>();
         private int cursor;
         private int collected;
         private boolean scanComplete;
 
-        private ScanTask(ServerPlayer player, BlockPos origin, ResourceKey<Level> dimension) {
+        private ScanTask(ServerPlayer player, BlockPos origin, ResourceKey<Level> dimension, Block targetBlock) {
             this.player = player;
             this.origin = origin;
             this.dimension = dimension;
+            this.targetBlock = targetBlock;
         }
 
         private boolean tick(ServerLevel level) {
@@ -91,7 +112,7 @@ public final class RemoteMiningManager {
                     continue;
                 }
 
-                if (level.getBlockState(pos).is(Blocks.IRON_BLOCK)) {
+                if (level.getBlockState(pos).is(targetBlock)) {
                     targets.addLast(pos.immutable());
                 }
             }
@@ -103,7 +124,7 @@ public final class RemoteMiningManager {
             int broken = 0;
             while (broken < BLOCKS_PER_TICK && !targets.isEmpty()) {
                 BlockPos pos = targets.removeFirst();
-                if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(Blocks.IRON_BLOCK)) {
+                if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(targetBlock)) {
                     continue;
                 }
 
@@ -125,9 +146,10 @@ public final class RemoteMiningManager {
             double z = player.getZ() + look.z;
 
             int remaining = collected;
+            int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
             while (remaining > 0) {
-                int amount = Math.min(remaining, Items.IRON_BLOCK.getDefaultMaxStackSize());
-                ItemStack stack = new ItemStack(Items.IRON_BLOCK, amount);
+                int amount = Math.min(remaining, maxStack);
+                ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
                 ItemEntity entity = new ItemEntity(level, x, y, z, stack);
                 entity.setDefaultPickUpDelay();
                 level.addFreshEntity(entity);
