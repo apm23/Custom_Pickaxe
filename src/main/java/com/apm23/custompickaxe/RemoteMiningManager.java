@@ -18,12 +18,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class RemoteMiningManager {
-    private static final int HALF_RANGE = 32;
-    private static final int SIDE = 64;
-    private static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
-
-    // Deliberately conservative. A complete 64^3 scan takes roughly 128 server ticks
-    // (~6.4 seconds at 20 TPS), trading a little latency for much lower tick spikes.
     private static final int POSITIONS_PER_TICK = 2048;
     private static final int BLOCKS_PER_TICK = 64;
 
@@ -58,8 +52,6 @@ public final class RemoteMiningManager {
             breakNaturalMask(level, player, origin);
         }
 
-        // One active scan per player. Re-triggering replaces the old scan instead of
-        // accumulating background work.
         TASKS.put(player.getUUID(), new ScanTask(
                 player,
                 origin.getX(),
@@ -166,7 +158,7 @@ public final class RemoteMiningManager {
 
             scanAndBreak(level);
 
-            if (cursor >= TOTAL_POSITIONS) {
+            if (cursor >= ScanLayout.TOTAL_POSITIONS) {
                 dropCollected(level);
                 return true;
             }
@@ -177,20 +169,16 @@ public final class RemoteMiningManager {
             int scanned = 0;
             int broken = 0;
 
-            while (cursor < TOTAL_POSITIONS
+            while (cursor < ScanLayout.TOTAL_POSITIONS
                     && scanned < POSITIONS_PER_TICK
                     && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
                 scanned++;
 
-                int x = index & 63;
-                int z = (index >> 6) & 63;
-                int y = (index >> 12) & 63;
-
                 scanPos.set(
-                        originX + x - HALF_RANGE,
-                        originY + y - HALF_RANGE,
-                        originZ + z - HALF_RANGE
+                        originX + ScanLayout.offsetX(index),
+                        originY + ScanLayout.offsetY(index),
+                        originZ + ScanLayout.offsetZ(index)
                 );
 
                 if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) {
@@ -229,5 +217,26 @@ public final class RemoteMiningManager {
                 remaining -= amount;
             }
         }
+    }
+}
+
+final class ScanLayout {
+    static final int SIDE = 64;
+    static final int HALF_RANGE = 32;
+    static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
+
+    private ScanLayout() {
+    }
+
+    static int offsetX(int index) {
+        return (index & 63) - HALF_RANGE;
+    }
+
+    static int offsetZ(int index) {
+        return ((index >> 6) & 63) - HALF_RANGE;
+    }
+
+    static int offsetY(int index) {
+        return ((index >> 12) & 63) - HALF_RANGE;
     }
 }
