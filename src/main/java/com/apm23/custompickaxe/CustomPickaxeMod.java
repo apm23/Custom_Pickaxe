@@ -2,7 +2,6 @@ package com.apm23.custompickaxe;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.server.level.ServerLevel;
@@ -38,9 +37,6 @@ public final class CustomPickaxeMod implements ModInitializer {
         });
 
         ServerTickEvents.END_LEVEL_TICK.register(RemoteMiningManager::tick);
-        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                RemoteMiningManager.cancel(handler.getPlayer()));
-
         LOGGER.info("Custom Pickaxe server-side mod initialized");
     }
 
