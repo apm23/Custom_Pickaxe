@@ -43,7 +43,7 @@ public final class CustomPickaxeMod implements ModInitializer {
             if (!PickaxeIdentity.isRemotePickaxe(stack)
                     || !PickaxeIdentity.isEnabled(stack)
                     || !RemoteMiningManager.isSupportedType(type)
-                    || isOre(state)) {
+                    || isOreLikeResource(state)) {
                 return;
             }
 
@@ -55,7 +55,7 @@ public final class CustomPickaxeMod implements ModInitializer {
         LOGGER.info("Custom Pickaxe server-side mod initialized");
     }
 
-    private static boolean isOre(BlockState state) {
+    private static boolean isOreLikeResource(BlockState state) {
         return state.is(Blocks.COAL_ORE)
                 || state.is(Blocks.DEEPSLATE_COAL_ORE)
                 || state.is(Blocks.COPPER_ORE)
@@ -73,6 +73,7 @@ public final class CustomPickaxeMod implements ModInitializer {
                 || state.is(Blocks.DEEPSLATE_LAPIS_ORE)
                 || state.is(Blocks.REDSTONE_ORE)
                 || state.is(Blocks.DEEPSLATE_REDSTONE_ORE)
-                || state.is(Blocks.NETHER_QUARTZ_ORE);
+                || state.is(Blocks.NETHER_QUARTZ_ORE)
+                || state.is(Blocks.ANCIENT_DEBRIS);
     }
 }
