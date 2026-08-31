@@ -44,22 +44,18 @@ public final class RemoteMiningManager {
 
     public static void start(ServerPlayer player, BlockPos origin, String type) {
         Block target = TARGETS.get(type);
-        if (target == null) {
-            return;
-        }
+        if (target == null) return;
 
         if (player.level() instanceof ServerLevel level) {
             breakNaturalMask(level, player, origin);
         }
 
         TASKS.put(player.getUUID(), new ScanTask(
-                player,
-                origin.getX(),
-                origin.getY(),
-                origin.getZ(),
-                player.level().dimension(),
-                target
-        ));
+                player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target));
+    }
+
+    public static void cancel(ServerPlayer player) {
+        TASKS.remove(player.getUUID());
     }
 
     public static void tick(ServerLevel level) {
@@ -71,72 +67,42 @@ public final class RemoteMiningManager {
         int wanted = random.nextInt(2, 6);
         int broken = 0;
         int attempts = 0;
-
         Direction forward = player.getDirection();
         Direction side = forward.getClockWise();
 
         while (broken < wanted && attempts++ < 24) {
-            int forwardOffset = random.nextInt(0, 3);
-            int sideOffset = random.nextInt(-1, 2);
-            int yOffset = random.nextInt(-1, 2);
-
             BlockPos candidate = origin
-                    .relative(forward, forwardOffset)
-                    .relative(side, sideOffset)
-                    .above(yOffset);
+                    .relative(forward, random.nextInt(0, 3))
+                    .relative(side, random.nextInt(-1, 2))
+                    .above(random.nextInt(-1, 2));
 
-            if (candidate.equals(origin)
-                    || !level.isInWorldBounds(candidate)
-                    || !level.hasChunkAt(candidate)
-                    || level.getBlockEntity(candidate) != null) {
-                continue;
-            }
+            if (candidate.equals(origin) || !level.isInWorldBounds(candidate)
+                    || !level.hasChunkAt(candidate) || level.getBlockEntity(candidate) != null) continue;
 
             BlockState state = level.getBlockState(candidate);
-            if (!isNaturalMaskTerrain(state)) {
-                continue;
-            }
-
-            if (level.destroyBlock(candidate, true, player)) {
-                broken++;
-            }
+            if (!isNaturalMaskTerrain(state)) continue;
+            if (level.destroyBlock(candidate, true, player)) broken++;
         }
     }
 
     private static boolean isNaturalMaskTerrain(BlockState state) {
-        return state.is(Blocks.STONE)
-                || state.is(Blocks.DEEPSLATE)
-                || state.is(Blocks.TUFF)
-                || state.is(Blocks.GRANITE)
-                || state.is(Blocks.DIORITE)
-                || state.is(Blocks.ANDESITE)
-                || state.is(Blocks.DIRT)
-                || state.is(Blocks.GRAVEL)
-                || state.is(Blocks.NETHERRACK)
-                || state.is(Blocks.BLACKSTONE)
-                || state.is(Blocks.BASALT)
-                || state.is(Blocks.SMOOTH_BASALT);
+        return state.is(Blocks.STONE) || state.is(Blocks.DEEPSLATE) || state.is(Blocks.TUFF)
+                || state.is(Blocks.GRANITE) || state.is(Blocks.DIORITE) || state.is(Blocks.ANDESITE)
+                || state.is(Blocks.DIRT) || state.is(Blocks.GRAVEL) || state.is(Blocks.NETHERRACK)
+                || state.is(Blocks.BLACKSTONE) || state.is(Blocks.BASALT) || state.is(Blocks.SMOOTH_BASALT);
     }
 
     private static final class ScanTask {
         private final ServerPlayer player;
-        private final int originX;
-        private final int originY;
-        private final int originZ;
+        private final int originX, originY, originZ;
         private final ResourceKey<Level> dimension;
         private final Block targetBlock;
         private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
         private int cursor;
         private int collected;
 
-        private ScanTask(
-                ServerPlayer player,
-                int originX,
-                int originY,
-                int originZ,
-                ResourceKey<Level> dimension,
-                Block targetBlock
-        ) {
+        private ScanTask(ServerPlayer player, int originX, int originY, int originZ,
+                         ResourceKey<Level> dimension, Block targetBlock) {
             this.player = player;
             this.originX = originX;
             this.originY = originY;
@@ -146,18 +112,11 @@ public final class RemoteMiningManager {
         }
 
         private boolean tick(ServerLevel level) {
-            if (player.isRemoved()) {
-                return true;
-            }
-            if (level.dimension() != dimension) {
-                return false;
-            }
-            if (player.level() != level) {
-                return true;
-            }
+            if (player.isRemoved() || player.hasDisconnected()) return true;
+            if (level.dimension() != dimension) return false;
+            if (player.level() != level) return true;
 
             scanAndBreak(level);
-
             if (cursor >= ScanLayout.TOTAL_POSITIONS) {
                 dropCollected(level);
                 return true;
@@ -168,27 +127,14 @@ public final class RemoteMiningManager {
         private void scanAndBreak(ServerLevel level) {
             int scanned = 0;
             int broken = 0;
-
-            while (cursor < ScanLayout.TOTAL_POSITIONS
-                    && scanned < POSITIONS_PER_TICK
-                    && broken < BLOCKS_PER_TICK) {
+            while (cursor < ScanLayout.TOTAL_POSITIONS && scanned < POSITIONS_PER_TICK && broken < BLOCKS_PER_TICK) {
                 int index = cursor++;
                 scanned++;
+                scanPos.set(originX + ScanLayout.offsetX(index), originY + ScanLayout.offsetY(index),
+                        originZ + ScanLayout.offsetZ(index));
 
-                scanPos.set(
-                        originX + ScanLayout.offsetX(index),
-                        originY + ScanLayout.offsetY(index),
-                        originZ + ScanLayout.offsetZ(index)
-                );
-
-                if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) {
-                    continue;
-                }
-
-                if (!level.getBlockState(scanPos).is(targetBlock)) {
-                    continue;
-                }
-
+                if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) continue;
+                if (!level.getBlockState(scanPos).is(targetBlock)) continue;
                 if (level.destroyBlock(scanPos, false, player)) {
                     collected++;
                     broken++;
@@ -197,9 +143,7 @@ public final class RemoteMiningManager {
         }
 
         private void dropCollected(ServerLevel level) {
-            if (collected <= 0) {
-                return;
-            }
+            if (collected <= 0 || player.isRemoved() || player.hasDisconnected()) return;
 
             var look = player.getLookAngle();
             double x = player.getX() + look.x;
@@ -208,10 +152,10 @@ public final class RemoteMiningManager {
             int remaining = collected;
             int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
 
+            // Spawn the minimum possible entity count: one entity per full item stack.
             while (remaining > 0) {
                 int amount = Math.min(remaining, maxStack);
-                ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
-                ItemEntity entity = new ItemEntity(level, x, y, z, stack);
+                ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(targetBlock.asItem(), amount));
                 entity.setDefaultPickUpDelay();
                 level.addFreshEntity(entity);
                 remaining -= amount;
@@ -225,18 +169,9 @@ final class ScanLayout {
     static final int HALF_RANGE = 32;
     static final int TOTAL_POSITIONS = SIDE * SIDE * SIDE;
 
-    private ScanLayout() {
-    }
+    private ScanLayout() {}
 
-    static int offsetX(int index) {
-        return (index & 63) - HALF_RANGE;
-    }
-
-    static int offsetZ(int index) {
-        return ((index >> 6) & 63) - HALF_RANGE;
-    }
-
-    static int offsetY(int index) {
-        return ((index >> 12) & 63) - HALF_RANGE;
-    }
+    static int offsetX(int index) { return (index & 63) - HALF_RANGE; }
+    static int offsetZ(int index) { return ((index >> 6) & 63) - HALF_RANGE; }
+    static int offsetY(int index) { return ((index >> 12) & 63) - HALF_RANGE; }
 }
