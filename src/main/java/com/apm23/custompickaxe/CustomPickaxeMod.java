@@ -4,6 +4,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -22,8 +24,14 @@ public final class CustomPickaxeMod implements ModInitializer {
         UseItemCallback.EVENT.register((player, level, hand) -> {
             if (level.isClientSide() || !player.isShiftKeyDown()) return InteractionResult.PASS;
             ItemStack stack = player.getItemInHand(hand);
-            if (!PickaxeIdentity.isRemotePickaxe(stack)) return InteractionResult.PASS;
-            PickaxeIdentity.toggleEnabled(stack);
+            if (!PickaxeIdentity.isRemotePickaxe(stack) || !(player instanceof ServerPlayer serverPlayer)) {
+                return InteractionResult.PASS;
+            }
+
+            boolean enabled = GlobalPickaxeState.toggle(serverPlayer.getUUID());
+            Component status = Component.literal(enabled ? "Pickaxe: ON" : "Pickaxe: OFF")
+                    .withStyle(enabled ? ChatFormatting.DARK_GREEN : ChatFormatting.DARK_GRAY);
+            serverPlayer.displayClientMessage(status, true);
             return InteractionResult.SUCCESS;
         });
 
@@ -31,7 +39,7 @@ public final class CustomPickaxeMod implements ModInitializer {
             if (!(level instanceof ServerLevel) || !(player instanceof ServerPlayer serverPlayer)) return;
             ItemStack stack = serverPlayer.getMainHandItem();
             String type = PickaxeIdentity.type(stack);
-            if (!PickaxeIdentity.isRemotePickaxe(stack) || !PickaxeIdentity.isEnabled(stack)
+            if (!PickaxeIdentity.isRemotePickaxe(stack) || !GlobalPickaxeState.isEnabled(serverPlayer.getUUID())
                     || !RemoteMiningManager.isSupportedType(type) || isOreLikeResource(state)) return;
             RemoteMiningManager.start(serverPlayer, pos, type);
         });
