@@ -16,23 +16,23 @@ final class ScanLayoutTest {
             int y = ScanLayout.offsetY(index);
             int z = ScanLayout.offsetZ(index);
 
-            assertTrue(x >= -32 && x <= 31);
-            assertTrue(y >= -32 && y <= 31);
-            assertTrue(z >= -32 && z <= 31);
+            assertTrue(x >= -8 && x <= 7);
+            assertTrue(y >= -8 && y <= 7);
+            assertTrue(z >= -8 && z <= 7);
 
-            int normalized = (x + 32)
-                    | ((z + 32) << 6)
-                    | ((y + 32) << 12);
+            int normalized = (x + 8)
+                    | ((z + 8) << 4)
+                    | ((y + 8) << 8);
             assertTrue(!seen.get(normalized), "duplicate scan position at index " + index);
             seen.set(normalized);
         }
 
-        assertEquals(64 * 64 * 64, seen.cardinality());
-        assertEquals(-32, ScanLayout.offsetX(0));
-        assertEquals(-32, ScanLayout.offsetY(0));
-        assertEquals(-32, ScanLayout.offsetZ(0));
-        assertEquals(31, ScanLayout.offsetX(ScanLayout.TOTAL_POSITIONS - 1));
-        assertEquals(31, ScanLayout.offsetY(ScanLayout.TOTAL_POSITIONS - 1));
-        assertEquals(31, ScanLayout.offsetZ(ScanLayout.TOTAL_POSITIONS - 1));
+        assertEquals(16 * 16 * 16, seen.cardinality());
+        assertEquals(-8, ScanLayout.offsetX(0));
+        assertEquals(-8, ScanLayout.offsetY(0));
+        assertEquals(-8, ScanLayout.offsetZ(0));
+        assertEquals(7, ScanLayout.offsetX(ScanLayout.TOTAL_POSITIONS - 1));
+        assertEquals(7, ScanLayout.offsetY(ScanLayout.TOTAL_POSITIONS - 1));
+        assertEquals(7, ScanLayout.offsetZ(ScanLayout.TOTAL_POSITIONS - 1));
     }
 }
