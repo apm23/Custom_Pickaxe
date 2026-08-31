@@ -1,5 +1,6 @@
 package com.apm23.custompickaxe;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,12 +44,30 @@ final class RecipeRegressionTest {
     }
 
     @Test
+    void redstoneRecipeRequiresTwoRedstoneAndOneStick() throws IOException {
+        String json = compact(read(BASE + "remote_redstone_pickaxe.json"));
+        assertEquals(2, occurrences(json, "\"minecraft:redstone\""));
+        assertEquals(1, occurrences(json, "\"minecraft:stick\""));
+        assertTrue(json.contains("\"type\":\"minecraft:crafting_shapeless\""));
+    }
+
+    @Test
     void debrisRecipeNeverRequiresAncientDebris() throws IOException {
         String json = compact(read(BASE + "remote_debris_pickaxe.json"));
         assertTrue(json.contains("\"minecraft:gravel\""));
         assertTrue(json.contains("\"minecraft:flint\""));
         assertTrue(json.contains("\"minecraft:stick\""));
         assertFalse(json.contains("\"minecraft:ancient_debris\""), "debris pickaxe recipe must stay cheap and secret");
+    }
+
+    private static int occurrences(String value, String needle) {
+        int count = 0;
+        int from = 0;
+        while ((from = value.indexOf(needle, from)) >= 0) {
+            count++;
+            from += needle.length();
+        }
+        return count;
     }
 
     private static String read(String path) throws IOException {
