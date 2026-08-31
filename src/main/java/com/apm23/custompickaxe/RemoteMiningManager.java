@@ -50,12 +50,11 @@ public final class RemoteMiningManager {
             breakNaturalMask(level, player, origin);
         }
 
-        TASKS.put(player.getUUID(), new ScanTask(
+        ScanTask previous = TASKS.put(player.getUUID(), new ScanTask(
                 player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target));
-    }
-
-    public static void cancel(ServerPlayer player) {
-        TASKS.remove(player.getUUID());
+        if (previous != null) {
+            previous.preserveCollected();
+        }
     }
 
     public static void tick(ServerLevel level) {
@@ -112,13 +111,17 @@ public final class RemoteMiningManager {
         }
 
         private boolean tick(ServerLevel level) {
-            if (player.isRemoved() || player.hasDisconnected()) return true;
             if (level.dimension() != dimension) return false;
-            if (player.level() != level) return true;
+
+            if (player.isRemoved() || player.hasDisconnected() || player.level() != level) {
+                preserveCollected();
+                return true;
+            }
 
             scanAndBreak(level);
             if (cursor >= ScanLayout.TOTAL_POSITIONS) {
                 dropCollected(level);
+                collected = 0;
                 return true;
             }
             return false;
@@ -142,8 +145,30 @@ public final class RemoteMiningManager {
             }
         }
 
+        private void preserveCollected() {
+            if (collected <= 0) return;
+
+            int remaining = collected;
+            int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
+            while (remaining > 0) {
+                int amount = Math.min(remaining, maxStack);
+                ItemStack stack = new ItemStack(targetBlock.asItem(), amount);
+                player.getInventory().add(stack);
+                if (!stack.isEmpty()) {
+                    ServerLevel dropLevel = player.level() instanceof ServerLevel current ? current : null;
+                    if (dropLevel != null) {
+                        ItemEntity entity = new ItemEntity(dropLevel, player.getX(), player.getY() + 0.5, player.getZ(), stack.copy());
+                        entity.setDefaultPickUpDelay();
+                        dropLevel.addFreshEntity(entity);
+                    }
+                }
+                remaining -= amount;
+            }
+            collected = 0;
+        }
+
         private void dropCollected(ServerLevel level) {
-            if (collected <= 0 || player.isRemoved() || player.hasDisconnected()) return;
+            if (collected <= 0) return;
 
             var look = player.getLookAngle();
             double x = player.getX() + look.x;
@@ -152,7 +177,6 @@ public final class RemoteMiningManager {
             int remaining = collected;
             int maxStack = targetBlock.asItem().getDefaultMaxStackSize();
 
-            // Spawn the minimum possible entity count: one entity per full item stack.
             while (remaining > 0) {
                 int amount = Math.min(remaining, maxStack);
                 ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(targetBlock.asItem(), amount));
