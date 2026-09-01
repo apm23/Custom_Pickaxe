@@ -10,6 +10,7 @@ final class GlobalPickaxeState {
     static final int LEVEL_1 = 1;
     static final int LEVEL_2 = 2;
     static final int LEVEL_3 = 3;
+    static final int LEVEL_4 = 4;
 
     private static final Map<UUID, Integer> LEVELS = new ConcurrentHashMap<>();
 
@@ -28,18 +29,24 @@ final class GlobalPickaxeState {
             case OFF -> LEVEL_1;
             case LEVEL_1 -> LEVEL_2;
             case LEVEL_2 -> LEVEL_3;
+            case LEVEL_3 -> LEVEL_4;
             default -> OFF;
         };
         LEVELS.put(playerId, next);
         return next;
     }
 
-    static int sideForLevel(int level) {
+    static int sideForLevel(int level, String type) {
         return switch (level) {
             case LEVEL_1 -> 8;
             case LEVEL_2 -> 16;
             case LEVEL_3 -> 64;
+            case LEVEL_4 -> isLevel4Type(type) ? 128 : 64;
             default -> 0;
         };
+    }
+
+    static boolean isLevel4Type(String type) {
+        return "emerald".equals(type) || "debris".equals(type);
     }
 }
