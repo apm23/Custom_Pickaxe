@@ -24,12 +24,16 @@ final class GlobalPickaxeState {
         return level(playerId) != OFF;
     }
 
-    static int cycle(UUID playerId) {
+    /**
+     * Cycles the shared player level. Level 4 is reachable only when the
+     * fourth click is performed with the emerald or debris custom pickaxe.
+     */
+    static int cycle(UUID playerId, String heldType) {
         int next = switch (level(playerId)) {
             case OFF -> LEVEL_1;
             case LEVEL_1 -> LEVEL_2;
             case LEVEL_2 -> LEVEL_3;
-            case LEVEL_3 -> LEVEL_4;
+            case LEVEL_3 -> isLevel4Type(heldType) ? LEVEL_4 : OFF;
             default -> OFF;
         };
         LEVELS.put(playerId, next);
