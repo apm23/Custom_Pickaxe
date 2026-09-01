@@ -12,6 +12,7 @@ final class ScanLayoutTest {
         verifySide(8);
         verifySide(16);
         verifySide(64);
+        verifySide(128);
     }
 
     private static void verifySide(int side) {
