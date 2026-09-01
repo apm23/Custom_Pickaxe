@@ -28,16 +28,16 @@ public final class RemoteMiningManager {
     private static final int BLOCKS_PER_TICK = 64;
 
     private static final Map<String, TargetSpec> TARGETS = Map.of(
-            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON, false),
-            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER, false),
-            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD, false),
-            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND, false),
-            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD, false),
-            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL, false),
-            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI, false),
-            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE, false),
-            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS, true),
-            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD, false)
+            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON),
+            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER),
+            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD),
+            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND),
+            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD),
+            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
+            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
+            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
+            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS),
+            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD)
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
@@ -54,12 +54,9 @@ public final class RemoteMiningManager {
 
         if (player.level() instanceof ServerLevel level) breakNaturalMask(level, player, origin);
 
-        int fortuneLevel = 0;
-        if (target.fortuneEligible) {
-            var enchantments = player.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
-            fortuneLevel = EnchantmentHelper.getItemEnchantmentLevel(
-                    enchantments.getOrThrow(Enchantments.FORTUNE), player.getMainHandItem());
-        }
+        var enchantments = player.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        int fortuneLevel = EnchantmentHelper.getItemEnchantmentLevel(
+                enchantments.getOrThrow(Enchantments.FORTUNE), player.getMainHandItem());
 
         ScanTask previous = TASKS.put(player.getUUID(), new ScanTask(
                 player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target, side, fortuneLevel));
@@ -154,10 +151,7 @@ public final class RemoteMiningManager {
                 BlockState state = level.getBlockState(scanPos);
                 if (!target.blocks.contains(state.getBlock())) continue;
                 if (level.destroyBlock(scanPos, false, player)) {
-                    int multiplier = target.fortuneEligible
-                            ? FortuneMath.randomMultiplier(fortuneLevel)
-                            : 1;
-                    collected += multiplier;
+                    collected += FortuneMath.randomMultiplier(fortuneLevel);
                     broken++;
                 }
             }
@@ -200,14 +194,14 @@ public final class RemoteMiningManager {
         }
     }
 
-    private record TargetSpec(Set<Block> blocks, Item reward, boolean fortuneEligible) {}
+    private record TargetSpec(Set<Block> blocks, Item reward) {}
 }
 
 final class ScanLayout {
     private ScanLayout() {}
 
     static boolean isSupportedSide(int side) {
-        return side == 8 || side == 16 || side == 64;
+        return side == 8 || side == 16 || side == 64 || side == 128;
     }
 
     static int totalPositions(int side) {
