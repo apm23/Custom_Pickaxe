@@ -16,7 +16,7 @@ final class RecipeRegressionTest {
     private static final String BASE = "data/custom_pickaxe/recipe/";
 
     @Test
-    void allNineRecipesStayDisguisedAndKeepExpectedIngredients() throws IOException {
+    void allTenRecipesStayDisguisedAndKeepExpectedIngredients() throws IOException {
         Map<String, List<String>> expected = new LinkedHashMap<>();
         expected.put("iron", List.of("minecraft:raw_iron", "minecraft:stick"));
         expected.put("copper", List.of("minecraft:raw_copper", "minecraft:stick"));
@@ -27,6 +27,7 @@ final class RecipeRegressionTest {
         expected.put("lapis", List.of("minecraft:lapis_lazuli", "minecraft:stick"));
         expected.put("redstone", List.of("minecraft:redstone", "minecraft:stick"));
         expected.put("debris", List.of("minecraft:gravel", "minecraft:flint", "minecraft:stick"));
+        expected.put("amethyst", List.of("minecraft:amethyst_shard", "minecraft:stick"));
 
         for (var entry : expected.entrySet()) {
             String type = entry.getKey();
