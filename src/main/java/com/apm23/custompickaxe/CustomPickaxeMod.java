@@ -29,7 +29,8 @@ public final class CustomPickaxeMod implements ModInitializer {
                 return InteractionResult.PASS;
             }
 
-            int miningLevel = GlobalPickaxeState.cycle(serverPlayer.getUUID());
+            String type = PickaxeIdentity.type(stack);
+            int miningLevel = GlobalPickaxeState.cycle(serverPlayer.getUUID(), type);
             Component status = switch (miningLevel) {
                 case GlobalPickaxeState.LEVEL_1 -> Component.literal("Pickaxe: L1 8x8")
                         .withStyle(ChatFormatting.DARK_GREEN);
