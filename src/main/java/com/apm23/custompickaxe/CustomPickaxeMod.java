@@ -67,6 +67,9 @@ public final class CustomPickaxeMod implements ModInitializer {
                 || state.is(Blocks.DEEPSLATE_IRON_ORE) || state.is(Blocks.LAPIS_ORE)
                 || state.is(Blocks.DEEPSLATE_LAPIS_ORE) || state.is(Blocks.REDSTONE_ORE)
                 || state.is(Blocks.DEEPSLATE_REDSTONE_ORE) || state.is(Blocks.NETHER_QUARTZ_ORE)
-                || state.is(Blocks.ANCIENT_DEBRIS);
+                || state.is(Blocks.ANCIENT_DEBRIS)
+                || state.is(Blocks.AMETHYST_BLOCK) || state.is(Blocks.BUDDING_AMETHYST)
+                || state.is(Blocks.SMALL_AMETHYST_BUD) || state.is(Blocks.MEDIUM_AMETHYST_BUD)
+                || state.is(Blocks.LARGE_AMETHYST_BUD) || state.is(Blocks.AMETHYST_CLUSTER);
     }
 }
