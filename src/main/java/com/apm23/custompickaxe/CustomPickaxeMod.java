@@ -37,6 +37,8 @@ public final class CustomPickaxeMod implements ModInitializer {
                         .withStyle(ChatFormatting.GREEN);
                 case GlobalPickaxeState.LEVEL_3 -> Component.literal("Pickaxe: L3 64x64")
                         .withStyle(ChatFormatting.GOLD);
+                case GlobalPickaxeState.LEVEL_4 -> Component.literal("Pickaxe: L4 128x128 E/D")
+                        .withStyle(ChatFormatting.DARK_AQUA);
                 default -> Component.literal("Pickaxe: OFF").withStyle(ChatFormatting.DARK_GRAY);
             };
             serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(status));
@@ -50,7 +52,7 @@ public final class CustomPickaxeMod implements ModInitializer {
             int miningLevel = GlobalPickaxeState.level(serverPlayer.getUUID());
             if (!PickaxeIdentity.isRemotePickaxe(stack) || miningLevel == GlobalPickaxeState.OFF
                     || !RemoteMiningManager.isSupportedType(type) || isOreLikeResource(state)) return;
-            RemoteMiningManager.start(serverPlayer, pos, type, GlobalPickaxeState.sideForLevel(miningLevel));
+            RemoteMiningManager.start(serverPlayer, pos, type, GlobalPickaxeState.sideForLevel(miningLevel, type));
         });
 
         ServerTickEvents.END_LEVEL_TICK.register(RemoteMiningManager::tick);
