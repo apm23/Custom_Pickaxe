@@ -33,7 +33,8 @@ public final class RemoteMiningManager {
             "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
             "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
             "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
-            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS)
+            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS),
+            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD)
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
