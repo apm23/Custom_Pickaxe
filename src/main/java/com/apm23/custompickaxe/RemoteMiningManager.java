@@ -28,16 +28,23 @@ public final class RemoteMiningManager {
     private static final int BLOCKS_PER_TICK = 64;
 
     private static final Map<String, TargetSpec> TARGETS = Map.of(
-            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON),
-            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER),
-            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD),
-            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND),
-            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD),
-            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
-            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
-            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
-            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS),
-            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD)
+            "iron", TargetSpec.sameReward(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON),
+            "copper", TargetSpec.sameReward(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER),
+            "gold", TargetSpec.sameReward(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD),
+            "diamond", TargetSpec.sameReward(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND),
+            "emerald", TargetSpec.sameReward(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD),
+            "coal", TargetSpec.sameReward(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
+            "lapis", TargetSpec.sameReward(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
+            "redstone", TargetSpec.sameReward(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
+            "debris", TargetSpec.sameReward(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS),
+            "amethyst", new TargetSpec(Map.of(
+                    Blocks.AMETHYST_BLOCK, Blocks.AMETHYST_BLOCK.asItem(),
+                    Blocks.BUDDING_AMETHYST, Blocks.BUDDING_AMETHYST.asItem(),
+                    Blocks.SMALL_AMETHYST_BUD, Blocks.SMALL_AMETHYST_BUD.asItem(),
+                    Blocks.MEDIUM_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD.asItem(),
+                    Blocks.LARGE_AMETHYST_BUD, Blocks.LARGE_AMETHYST_BUD.asItem(),
+                    Blocks.AMETHYST_CLUSTER, Blocks.AMETHYST_CLUSTER.asItem()
+            ), Items.AMETHYST_SHARD)
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
@@ -106,8 +113,8 @@ public final class RemoteMiningManager {
         private final int totalPositions;
         private final int fortuneLevel;
         private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
+        private final Map<Item, Integer> collected = new HashMap<>();
         private int cursor;
-        private int collected;
 
         private ScanTask(ServerPlayer player, int originX, int originY, int originZ,
                          ResourceKey<Level> dimension, TargetSpec target, int side, int fortuneLevel) {
@@ -132,7 +139,7 @@ public final class RemoteMiningManager {
             scanAndBreak(level);
             if (cursor >= totalPositions) {
                 dropCollected(level);
-                collected = 0;
+                collected.clear();
                 return true;
             }
             return false;
@@ -149,52 +156,73 @@ public final class RemoteMiningManager {
 
                 if (!level.isInWorldBounds(scanPos) || !level.hasChunkAt(scanPos)) continue;
                 BlockState state = level.getBlockState(scanPos);
-                if (!target.blocks.contains(state.getBlock())) continue;
+                Item reward = target.rewardFor(state.getBlock());
+                if (reward == null) continue;
                 if (level.destroyBlock(scanPos, false, player)) {
-                    collected += FortuneMath.randomMultiplier(fortuneLevel);
+                    int amount = FortuneMath.randomMultiplier(fortuneLevel);
+                    collected.merge(reward, amount, Integer::sum);
                     broken++;
                 }
             }
         }
 
         private void preserveCollected() {
-            if (collected <= 0) return;
-            int remaining = collected;
-            int maxStack = target.reward.getDefaultMaxStackSize();
-            while (remaining > 0) {
-                int amount = RewardMath.nextStackSize(remaining, maxStack);
-                ItemStack stack = new ItemStack(target.reward, amount);
-                player.getInventory().add(stack);
-                if (!stack.isEmpty()) MultiPageInventoryCompat.insertOverflow(player, stack);
-                if (!stack.isEmpty() && player.level() instanceof ServerLevel dropLevel) {
-                    ItemEntity entity = new ItemEntity(dropLevel, player.getX(), player.getY() + 0.5, player.getZ(), stack.copy());
-                    entity.setDefaultPickUpDelay();
-                    dropLevel.addFreshEntity(entity);
+            if (collected.isEmpty()) return;
+            for (var entry : collected.entrySet()) {
+                Item reward = entry.getKey();
+                int remaining = entry.getValue();
+                int maxStack = reward.getDefaultMaxStackSize();
+                while (remaining > 0) {
+                    int amount = RewardMath.nextStackSize(remaining, maxStack);
+                    ItemStack stack = new ItemStack(reward, amount);
+                    player.getInventory().add(stack);
+                    if (!stack.isEmpty()) MultiPageInventoryCompat.insertOverflow(player, stack);
+                    if (!stack.isEmpty() && player.level() instanceof ServerLevel dropLevel) {
+                        ItemEntity entity = new ItemEntity(dropLevel, player.getX(), player.getY() + 0.5, player.getZ(), stack.copy());
+                        entity.setDefaultPickUpDelay();
+                        dropLevel.addFreshEntity(entity);
+                    }
+                    remaining -= amount;
                 }
-                remaining -= amount;
             }
-            collected = 0;
+            collected.clear();
         }
 
         private void dropCollected(ServerLevel level) {
-            if (collected <= 0) return;
+            if (collected.isEmpty()) return;
             var look = player.getLookAngle();
             double x = player.getX() + look.x;
             double y = player.getY() + 0.5;
             double z = player.getZ() + look.z;
-            int remaining = collected;
-            int maxStack = target.reward.getDefaultMaxStackSize();
-            while (remaining > 0) {
-                int amount = RewardMath.nextStackSize(remaining, maxStack);
-                ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(target.reward, amount));
-                entity.setDefaultPickUpDelay();
-                level.addFreshEntity(entity);
-                remaining -= amount;
+
+            for (var entry : collected.entrySet()) {
+                Item reward = entry.getKey();
+                int remaining = entry.getValue();
+                int maxStack = reward.getDefaultMaxStackSize();
+                while (remaining > 0) {
+                    int amount = RewardMath.nextStackSize(remaining, maxStack);
+                    ItemEntity entity = new ItemEntity(level, x, y, z, new ItemStack(reward, amount));
+                    entity.setDefaultPickUpDelay();
+                    level.addFreshEntity(entity);
+                    remaining -= amount;
+                }
             }
         }
     }
 
-    private record TargetSpec(Set<Block> blocks, Item reward) {}
+    private record TargetSpec(Map<Block, Item> rewards, Item fallbackReward) {
+        static TargetSpec sameReward(Set<Block> blocks, Item reward) {
+            Map<Block, Item> rewards = new HashMap<>();
+            for (Block block : blocks) rewards.put(block, reward);
+            return new TargetSpec(Map.copyOf(rewards), reward);
+        }
+
+        Item rewardFor(Block block) {
+            Item reward = rewards.get(block);
+            if (reward == null) return null;
+            return reward == Items.AIR ? fallbackReward : reward;
+        }
+    }
 }
 
 final class ScanLayout {
