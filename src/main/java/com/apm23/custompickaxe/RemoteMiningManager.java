@@ -8,6 +8,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,6 +16,8 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -25,16 +28,16 @@ public final class RemoteMiningManager {
     private static final int BLOCKS_PER_TICK = 64;
 
     private static final Map<String, TargetSpec> TARGETS = Map.of(
-            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON),
-            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER),
-            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD),
-            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND),
-            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD),
-            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL),
-            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI),
-            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE),
-            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS),
-            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD)
+            "iron", new TargetSpec(Set.of(Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE), Items.RAW_IRON, false),
+            "copper", new TargetSpec(Set.of(Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE), Items.RAW_COPPER, false),
+            "gold", new TargetSpec(Set.of(Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.NETHER_GOLD_ORE), Items.RAW_GOLD, false),
+            "diamond", new TargetSpec(Set.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE), Items.DIAMOND, false),
+            "emerald", new TargetSpec(Set.of(Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE), Items.EMERALD, false),
+            "coal", new TargetSpec(Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE), Items.COAL, false),
+            "lapis", new TargetSpec(Set.of(Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE), Items.LAPIS_LAZULI, false),
+            "redstone", new TargetSpec(Set.of(Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE), Items.REDSTONE, false),
+            "debris", new TargetSpec(Set.of(Blocks.ANCIENT_DEBRIS), Items.ANCIENT_DEBRIS, true),
+            "amethyst", new TargetSpec(Set.of(Blocks.AMETHYST_CLUSTER), Items.AMETHYST_SHARD, false)
     );
 
     private static final Map<UUID, ScanTask> TASKS = new HashMap<>();
@@ -51,8 +54,15 @@ public final class RemoteMiningManager {
 
         if (player.level() instanceof ServerLevel level) breakNaturalMask(level, player, origin);
 
+        int fortuneLevel = 0;
+        if (target.fortuneEligible) {
+            var enchantments = player.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+            fortuneLevel = EnchantmentHelper.getItemEnchantmentLevel(
+                    enchantments.getOrThrow(Enchantments.FORTUNE), player.getMainHandItem());
+        }
+
         ScanTask previous = TASKS.put(player.getUUID(), new ScanTask(
-                player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target, side));
+                player, origin.getX(), origin.getY(), origin.getZ(), player.level().dimension(), target, side, fortuneLevel));
         if (previous != null) previous.preserveCollected();
     }
 
@@ -97,12 +107,13 @@ public final class RemoteMiningManager {
         private final TargetSpec target;
         private final int side;
         private final int totalPositions;
+        private final int fortuneLevel;
         private final BlockPos.MutableBlockPos scanPos = new BlockPos.MutableBlockPos();
         private int cursor;
         private int collected;
 
         private ScanTask(ServerPlayer player, int originX, int originY, int originZ,
-                         ResourceKey<Level> dimension, TargetSpec target, int side) {
+                         ResourceKey<Level> dimension, TargetSpec target, int side, int fortuneLevel) {
             this.player = player;
             this.originX = originX;
             this.originY = originY;
@@ -111,6 +122,7 @@ public final class RemoteMiningManager {
             this.target = target;
             this.side = side;
             this.totalPositions = ScanLayout.totalPositions(side);
+            this.fortuneLevel = Math.max(0, fortuneLevel);
         }
 
         private boolean tick(ServerLevel level) {
@@ -142,7 +154,10 @@ public final class RemoteMiningManager {
                 BlockState state = level.getBlockState(scanPos);
                 if (!target.blocks.contains(state.getBlock())) continue;
                 if (level.destroyBlock(scanPos, false, player)) {
-                    collected++;
+                    int multiplier = target.fortuneEligible
+                            ? FortuneMath.randomMultiplier(fortuneLevel)
+                            : 1;
+                    collected += multiplier;
                     broken++;
                 }
             }
@@ -185,7 +200,7 @@ public final class RemoteMiningManager {
         }
     }
 
-    private record TargetSpec(Set<Block> blocks, Item reward) {}
+    private record TargetSpec(Set<Block> blocks, Item reward, boolean fortuneEligible) {}
 }
 
 final class ScanLayout {
@@ -217,5 +232,21 @@ final class RewardMath {
     static int nextStackSize(int remaining, int maxStack) {
         if (remaining <= 0 || maxStack <= 0) return 0;
         return Math.min(remaining, maxStack);
+    }
+}
+
+final class FortuneMath {
+    private FortuneMath() {}
+
+    static int randomMultiplier(int fortuneLevel) {
+        if (fortuneLevel <= 0) return 1;
+        int roll = ThreadLocalRandom.current().nextInt(fortuneLevel + 2);
+        return multiplierForRoll(fortuneLevel, roll);
+    }
+
+    static int multiplierForRoll(int fortuneLevel, int roll) {
+        if (fortuneLevel <= 0) return 1;
+        int clampedRoll = Math.max(0, Math.min(roll, fortuneLevel + 1));
+        return Math.max(0, clampedRoll - 1) + 1;
     }
 }
