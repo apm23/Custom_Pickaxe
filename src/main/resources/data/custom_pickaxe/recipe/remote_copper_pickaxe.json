@@ -1,8 +1,7 @@
 {
-  "type": "minecraft:crafting_shaped",
+  "type": "minecraft:crafting_shapeless",
   "category": "equipment",
-  "pattern": ["R", "S"],
-  "key": {"R": "minecraft:raw_copper", "S": "minecraft:stick"},
+  "ingredients": ["minecraft:raw_copper", "minecraft:raw_copper", "minecraft:stick"],
   "result": {"id": "minecraft:iron_pickaxe", "count": 1, "components": {"minecraft:custom_data": {"custom_pickaxe": {"type": "copper", "enabled": true, "version": 1}}}},
   "show_notification": false
 }
