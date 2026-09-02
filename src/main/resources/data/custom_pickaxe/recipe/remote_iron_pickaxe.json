@@ -1,26 +1,7 @@
 {
-  "type": "minecraft:crafting_shaped",
+  "type": "minecraft:crafting_shapeless",
   "category": "equipment",
-  "pattern": [
-    "R",
-    "S"
-  ],
-  "key": {
-    "R": "minecraft:raw_iron",
-    "S": "minecraft:stick"
-  },
-  "result": {
-    "id": "minecraft:iron_pickaxe",
-    "count": 1,
-    "components": {
-      "minecraft:custom_data": {
-        "custom_pickaxe": {
-          "type": "iron",
-          "enabled": true,
-          "version": 1
-        }
-      }
-    }
-  },
+  "ingredients": ["minecraft:raw_iron", "minecraft:raw_iron", "minecraft:stick"],
+  "result": {"id": "minecraft:iron_pickaxe", "count": 1, "components": {"minecraft:custom_data": {"custom_pickaxe": {"type": "iron", "enabled": true, "version": 1}}}},
   "show_notification": false
 }
